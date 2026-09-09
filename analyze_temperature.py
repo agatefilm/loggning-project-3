@@ -297,14 +297,15 @@ def plot_results(classifications, df_features, sensor_names, indoor_data, outdoo
 
     # --- 6. Medeltemperatur per timme för alla lägenheter ---
     plt.figure(figsize=(14, 8))
-    colors = [HEATING_CATEGORIES[classifications[s]]['color'] for s in sensor_names]
+    # Använd distinkta färger från seaborn-paletten för varje lägenhet
+    distinct_colors = sns.color_palette('husl', n_colors=len(sensor_names) + 1)
     for i, sensor in enumerate(sensor_names):
         df = indoor_data[sensor]
         df['hour'] = df['timestamp'].dt.hour
         hourly_avg = df.groupby('hour')['temperature'].mean()
-        plt.plot(range(24), hourly_avg, label=sensor, color=colors[i], marker='o', linewidth=2, markersize=4)
+        plt.plot(range(24), hourly_avg, label=sensor, color=distinct_colors[i], marker='o', linewidth=2, markersize=4)
     
-    # Lägg till utomhusdata
+    # Lägg till utomhusdata (svart streckad linje)
     outdoor_df['hour'] = outdoor_df['timestamp'].dt.hour
     outdoor_hourly_avg = outdoor_df.groupby('hour')['outdoor_temp'].mean()
     plt.plot(range(24), outdoor_hourly_avg, label='Utomhus', color='k', linewidth=2, linestyle='--', marker='s')
