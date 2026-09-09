@@ -34,25 +34,54 @@ HEATING_CATEGORIES = {
 # 1. LADDNING AV DATA (Automatisk + datumfilter)
 # ============================================================================
 def load_temperature_data(file_path):
-    """Ladda data från Excel-fil och filtrera datum >= 1 juni"""
+    """Ladda data från textfil (specialformat) och filtrera datum >= 1 juni"""
     try:
-        # Prova båda filändelser
-        if file_path.endswith('.xlsx'):
-            df = pd.read_excel(file_path, sheet_name='Sheet1', header=None)
-        else:
-            df = pd.read_excel(file_path, header=None)
-
-        data_df = df.iloc[12:].copy()  # Data börjar på rad 12
-        data_df.columns = ['id', 'timestamp', 'temperature', 'col4', 'col5', 'col6']
-        data_df['timestamp'] = pd.to_datetime(data_df['timestamp'], errors='coerce')
-        data_df['temperature'] = pd.to_numeric(data_df['temperature'], errors='coerce')
-        data_df = data_df.dropna(subset=['timestamp', 'temperature'])
-
-        # ⬇️ ⬇️ FILTRERA DATUM: Endast data från och med 1 juni ⬇️ ⬇️
-        data_df = data_df[data_df['timestamp'].dt.date >= pd.to_datetime('2024-06-01').date()]
-
+        # Läs filen som text
+        with open(file_path, 'r', encoding='latin-1') as f:
+            lines = f.readlines()
+        
+        # Hitta start av data (efter [#D])
+        data_start = None
+        for i, line in enumerate(lines):
+            if line.strip() == '[#D]':
+                data_start = i + 1
+                break
+        
+        if data_start is None:
+            print(f"❌ Fel: [#D] tagg hittades inte i {file_path}")
+            return pd.DataFrame(columns=['timestamp', 'temperature'])
+        
+        # Läs data
+        data_lines = lines[data_start:]
+        rows = []
+        for line in data_lines:
+            line = line.strip()
+            if not line or line.startswith('['):
+                continue
+            parts = line.split('\t')
+            if len(parts) >= 4:
+                date_str = parts[0].strip()
+                time_str = parts[1].strip()
+                temp_str = parts[3].strip().replace(',', '.')
+                try:
+                    timestamp = pd.to_datetime(f"{date_str} {time_str}", errors='coerce')
+                    temperature = float(temp_str)
+                    if pd.notna(timestamp):
+                        rows.append({'timestamp': timestamp, 'temperature': temperature})
+                except:
+                    continue
+        
+        data_df = pd.DataFrame(rows)
         if len(data_df) == 0:
             print(f"⚠️  Varning: {file_path} har ingen data från/med 1 juni.")
+            return pd.DataFrame(columns=['timestamp', 'temperature'])
+        
+        # ⬇️ ⬇️ FILTRERA DATUM: Endast data från och med 1 juni ⬇️ ⬇️
+        data_df = data_df[data_df['timestamp'].dt.date >= pd.to_datetime('2024-06-01').date()]
+        
+        if len(data_df) == 0:
+            print(f"⚠️  Varning: {file_path} har ingen data från/med 1 juni.")
+        
         return data_df[['timestamp', 'temperature']]
     except Exception as e:
         print(f"❌ Fel vid laddning av {file_path}: {e}")
@@ -186,11 +215,14 @@ def plot_results(classifications, df_features, sensor_names, indoor_data, outdoo
     print("✅ Sparat: heating_classification_manual_summary.png")
 
     # --- 2. Feature-heatmap ---
-    df_features['category'] = [classifications[s] for s in sensor_names]
-    df_norm = df_features[['corr_outdoor', 'corr_day', 'corr_night', 'mean_diff', 'mean_daily_spike', 'overheating_low_outdoor', 'mean_night_temp']].copy()
+    df_features_copy = df_features.copy()
+    df_features_copy['category'] = [classifications[s] for s in sensor_names]
+    df_norm = df_features_copy[['corr_outdoor', 'corr_day', 'corr_night', 'mean_diff', 'mean_daily_spike', 'overheating_low_outdoor', 'mean_night_temp']].copy()
     scaler = MinMaxScaler()
     df_norm[df_norm.columns] = scaler.fit_transform(df_norm)
+    df_norm['category'] = df_features_copy['category']
     df_norm = df_norm.sort_values('category')
+    df_norm = df_norm.drop(columns=['category'])
 
     plt.figure(figsize=(14, 8))
     sns.heatmap(df_norm.T, cmap='viridis', annot=True, fmt='.2f',
