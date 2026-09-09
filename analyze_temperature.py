@@ -295,6 +295,31 @@ def plot_results(classifications, df_features, sensor_names, indoor_data, outdoo
             plt.close()
             print(f"✅ Sparat: temperature_patterns_category_{cat_id}_manual.png")
 
+    # --- 6. Medeltemperatur per timme för alla lägenheter ---
+    plt.figure(figsize=(14, 8))
+    colors = [HEATING_CATEGORIES[classifications[s]]['color'] for s in sensor_names]
+    for i, sensor in enumerate(sensor_names):
+        df = indoor_data[sensor]
+        df['hour'] = df['timestamp'].dt.hour
+        hourly_avg = df.groupby('hour')['temperature'].mean()
+        plt.plot(range(24), hourly_avg, label=sensor, color=colors[i], marker='o', linewidth=2, markersize=4)
+    
+    # Lägg till utomhusdata
+    outdoor_df['hour'] = outdoor_df['timestamp'].dt.hour
+    outdoor_hourly_avg = outdoor_df.groupby('hour')['outdoor_temp'].mean()
+    plt.plot(range(24), outdoor_hourly_avg, label='Utomhus', color='k', linewidth=2, linestyle='--', marker='s')
+    
+    plt.xlabel('Timme (0-24)')
+    plt.ylabel('Medeltemperatur (°C)')
+    plt.title('Medeltemperatur per timme under hela mätperioden')
+    plt.xticks(range(24))
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('hourly_average_temperature.png', dpi=150, bbox_inches='tight')
+    plt.close()
+    print("✅ Sparat: hourly_average_temperature.png")
+
 # ============================================================================
 # 5. RAPPORTGENERERING
 # ============================================================================
